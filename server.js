@@ -1,8 +1,11 @@
+require("dotenv").config();
+
 const express = require("express");
 const usersRoutes = require("./routes/users");
+const connectDB = require("./config/db");
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 app.use(express.json());
 
@@ -23,10 +26,16 @@ app.use("/api/users", usersRoutes);
 app.use((req, res) => {
   res.status(404).json({
     success: false,
-    message: "Route non trouvée"
+    message: "Route non trouvee"
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Serveur démarré sur http://localhost:${PORT}`);
-});
+const startServer = async () => {
+  await connectDB();
+
+  app.listen(PORT, () => {
+    console.log(`Serveur demarre sur http://localhost:${PORT}`);
+  });
+};
+
+startServer();

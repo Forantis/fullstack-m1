@@ -1,111 +1,188 @@
-const userModel = require("../models/userModel");
+const mongoose = require("mongoose");
+const User = require("../models/userModel");
 
-const getAllUsers = (req, res) => {
-  const { role } = req.query;
-  const users = userModel.getAll(role);
+const getAllUsers = async (req, res) => {
+  try {
+    const { role } = req.query;
+    const filter = {};
 
-  return res.status(200).json({
-    success: true,
-    count: users.length,
-    data: users
-  });
+    if (role) {
+      filter.role = role;
+    }
+
+    const users = await User.find(filter);
+
+    return res.status(200).json({
+      success: true,
+      count: users.length,
+      data: users
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Erreur serveur"
+    });
+  }
 };
 
-const getUserById = (req, res) => {
-  const id = Number.parseInt(req.params.id, 10);
-  const user = userModel.getById(id);
+const getUserById = async (req, res) => {
+  try {
+    const { id } = req.params;
 
-  if (!user) {
-    return res.status(404).json({
-      success: false,
-      message: "Utilisateur non trouvé"
-    });
-  }
-
-  return res.status(200).json({
-    success: true,
-    data: user
-  });
-};
-
-const createUser = (req, res) => {
-  const { name, email, role } = req.body;
-
-  if (!name || !email) {
-    return res.status(400).json({
-      success: false,
-      message: "Les champs name et email sont obligatoires"
-    });
-  }
-
-  if (userModel.getByEmail(email)) {
-    return res.status(409).json({
-      success: false,
-      message: "Email déjà utilisé"
-    });
-  }
-
-  const newUser = userModel.create({ name, email, role });
-
-  return res.status(201).json({
-    success: true,
-    data: newUser
-  });
-};
-
-const updateUser = (req, res) => {
-  const id = Number.parseInt(req.params.id, 10);
-  const existingUser = userModel.getById(id);
-
-  if (!existingUser) {
-    return res.status(404).json({
-      success: false,
-      message: "Utilisateur non trouvé"
-    });
-  }
-
-  const forbiddenFields = ["id", "createdAt"];
-
-  for (const field of forbiddenFields) {
-    if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+    if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({
         success: false,
-        message: `Le champ ${field} ne peut pas être modifié`
+        message: "ObjectId invalide"
       });
     }
-  }
 
-  if (req.body.email) {
-    const emailOwner = userModel.getByEmail(req.body.email);
+    const user = await User.findById(id);
 
-    if (emailOwner && emailOwner.id !== id) {
-      return res.status(409).json({
+    if (!user) {
+      return res.status(404).json({
         success: false,
-        message: "Email déjà utilisé"
+        message: "Utilisateur non trouve"
       });
     }
-  }
 
-  const updatedUser = userModel.update(id, req.body);
-
-  return res.status(200).json({
-    success: true,
-    data: updatedUser
-  });
-};
-
-const deleteUser = (req, res) => {
-  const id = Number.parseInt(req.params.id, 10);
-  const deleted = userModel.remove(id);
-
-  if (!deleted) {
-    return res.status(404).json({
+    return res.status(200).json({
+      success: true,
+      data: user
+    });
+  } catch (error) {
+    return res.status(500).json({
       success: false,
-      message: "Utilisateur non trouvé"
+      message: "Erreur serveur"
     });
   }
+};
 
-  return res.status(204).send();
+const createUser = async (req, res) => {
+  try {
+    const { name, email, role } = req.body;
+
+    if (!name || !email) {
+      return res.status(400).json({
+        success: false,
+        message: "Les champs name et email sont obligatoires"
+      });
+    }
+
+    const user = await User.create({ name, email, role });
+
+    return res.status(201).json({
+      success: true,
+      data: user
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "Email deja utilise"
+      });
+    }
+
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        success: false,
+        message: "Donnees invalides"
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Erreur serveur"
+    });
+  }
+};
+
+const updateUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "ObjectId invalide"
+      });
+    }
+
+    const forbiddenFields = ["_id", "createdAt", "id"];
+
+    for (const field of forbiddenFields) {
+      if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+        return res.status(400).json({
+          success: false,
+          message: `Le champ ${field} ne peut pas etre modifie`
+        });
+      }
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(id, req.body, {
+      new: true,
+      runValidators: true
+    });
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "Utilisateur non trouve"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: updatedUser
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "Email deja utilise"
+      });
+    }
+
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        success: false,
+        message: "Donnees invalides"
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Erreur serveur"
+    });
+  }
+};
+
+const deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "ObjectId invalide"
+      });
+    }
+
+    const deletedUser = await User.findByIdAndDelete(id);
+
+    if (!deletedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "Utilisateur non trouve"
+      });
+    }
+
+    return res.status(204).send();
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Erreur serveur"
+    });
+  }
 };
 
 module.exports = {
